@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 import tensorflow as tf
 
-from recommenders.utils.timer import Timer
+from utils.timer import Timer
 
 
 class MultiHeadAttention(tf.keras.layers.Layer):
