@@ -9,9 +9,9 @@ import warnings
 import pandas as pd
 from typing import Optional
 from zipfile import ZipFile
-from recommenders.datasets.download_utils import maybe_download, download_path
-from recommenders.utils.notebook_utils import is_databricks
-from recommenders.utils.constants import (
+from dataset.download_utils import maybe_download, download_path
+from utils.notebook_utils import is_databricks
+from utils.constants import (
     DEFAULT_HEADER,
     DEFAULT_ITEM_COL,
     DEFAULT_USER_COL,
@@ -451,7 +451,8 @@ def load_spark_df(
         item_pd_df = _load_item_df(
             size, item_datapath, movie_col, title_col, genres_col, year_col
         )
-        item_df = spark.createDataFrame(item_pd_df) if item_pd_df is not None else None
+        item_df = spark.createDataFrame(
+            item_pd_df) if item_pd_df is not None else None
 
         if is_databricks():
             if dbutils is None:
@@ -472,7 +473,8 @@ def load_spark_df(
         if len(separator) > 1:
             raw_data = spark.sparkContext.textFile(spark_datapath)
             data_rdd = raw_data.map(lambda l: l.split(separator)).map(
-                lambda c: [int(c[0]), int(c[1]), float(c[2]), int(c[3])][: len(schema)]
+                lambda c: [int(c[0]), int(c[1]), float(
+                    c[2]), int(c[3])][: len(schema)]
             )
             df = spark.createDataFrame(data_rdd, schema)
         else:
@@ -645,7 +647,8 @@ class MockMovielensSchema(pa.SchemaModel):
             schema = schema.remove_columns([DEFAULT_GENRE_COL])
 
         random.seed(seed)
-        schema.checks = [pa.Check.unique_columns([DEFAULT_USER_COL, DEFAULT_ITEM_COL])]
+        schema.checks = [pa.Check.unique_columns(
+            [DEFAULT_USER_COL, DEFAULT_ITEM_COL])]
         return schema.example(size=size)
 
     @classmethod
