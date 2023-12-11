@@ -475,7 +475,8 @@ class SASREC(tf.keras.Model):
         pos = x["positive"]
         neg = x["negative"]
 
-        mask = tf.expand_dims(tf.cast(tf.not_equal(input_seq, 0), tf.float32), -1)
+        mask = tf.expand_dims(
+            tf.cast(tf.not_equal(input_seq, 0), tf.float32), -1)
         seq_embeddings, positional_embeddings = self.embedding(input_seq)
 
         # add positional embeddings
@@ -538,7 +539,8 @@ class SASREC(tf.keras.Model):
         input_seq = inputs["input_seq"]
         candidate = inputs["candidate"]
 
-        mask = tf.expand_dims(tf.cast(tf.not_equal(input_seq, 0), tf.float32), -1)
+        mask = tf.expand_dims(
+            tf.cast(tf.not_equal(input_seq, 0), tf.float32), -1)
         seq_embeddings, positional_embeddings = self.embedding(input_seq)
         seq_embeddings += positional_embeddings
         # seq_embeddings = self.dropout_layer(seq_embeddings)
@@ -551,7 +553,8 @@ class SASREC(tf.keras.Model):
             [tf.shape(input_seq)[0] * self.seq_max_len, self.embedding_dim],
         )  # (b*s, d)
         candidate_emb = self.item_embedding_layer(candidate)  # (b, s, d)
-        candidate_emb = tf.transpose(candidate_emb, perm=[0, 2, 1])  # (b, d, s)
+        candidate_emb = tf.transpose(
+            candidate_emb, perm=[0, 2, 1])  # (b, d, s)
 
         test_logits = tf.matmul(seq_emb, candidate_emb)
         # (200, 100) * (1, 101, 100)'
@@ -670,17 +673,39 @@ class SASREC(tf.keras.Model):
             tf.TensorSpec(shape=(None, 1), dtype=tf.int64),
         ]
 
+        @tf.function
+        def jacobian(y, x):
+            # y debe ser de una sola dimensión
+            loop_vars = [
+                tf.constant(0, tf.int32),
+                tf.TensorArray(tf.float32, size=int(y.shape[0])),
+            ]
+
+            _, jacobian = tf.while_loop(
+                lambda i, _: i < int(y.shape[0]),
+                lambda i, res: (i+1, res.write(i, tf.gradients(y[i], x))),
+                loop_vars)
+
+            return jacobian.stack()
+
         @tf.function(input_signature=train_step_signature)
         def train_step(inp, tar):
             with tf.GradientTape() as tape:
+                tape.watch(self.trainable_variables)
+
                 pos_logits, neg_logits, loss_mask = self(inp, training=True)
                 loss = loss_function(pos_logits, neg_logits, loss_mask)
+
+                jaco = jacobian(loss, self.trainable_variables)
+                frobenius_norm = tf.norm(jaco)
+                total_loss = loss + 0.001 * frobenius_norm + \
+                    0.01 * tf.square(frobenius_norm)
 
             gradients = tape.gradient(loss, self.trainable_variables)
             optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
-            train_loss(loss)
-            return loss
+            train_loss(total_loss)
+            return total_loss
 
         T = 0.0
         t0 = Timer()
@@ -717,7 +742,8 @@ class SASREC(tf.keras.Model):
                 t0.start()
 
         t_test = self.evaluate(dataset)
-        print(f"\nepoch: {epoch}, test (NDCG@10: {t_test[0]}, HR@10: {t_test[1]})")
+        print(
+            f"\nepoch: {epoch}, test (NDCG@10: {t_test[0]}, HR@10: {t_test[1]})")
 
         return t_test
 
