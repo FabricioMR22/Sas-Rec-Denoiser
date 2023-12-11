@@ -673,39 +673,17 @@ class SASREC(tf.keras.Model):
             tf.TensorSpec(shape=(None, 1), dtype=tf.int64),
         ]
 
-        @tf.function
-        def jacobian(y, x):
-            # y debe ser de una sola dimensión
-            loop_vars = [
-                tf.constant(0, tf.int32),
-                tf.TensorArray(tf.float32, size=int(y.shape[0])),
-            ]
-
-            _, jacobian = tf.while_loop(
-                lambda i, _: i < int(y.shape[0]),
-                lambda i, res: (i+1, res.write(i, tf.gradients(y[i], x))),
-                loop_vars)
-
-            return jacobian.stack()
-
         @tf.function(input_signature=train_step_signature)
         def train_step(inp, tar):
             with tf.GradientTape() as tape:
-                tape.watch(self.trainable_variables)
-
                 pos_logits, neg_logits, loss_mask = self(inp, training=True)
                 loss = loss_function(pos_logits, neg_logits, loss_mask)
-
-                jaco = jacobian(loss, self.trainable_variables)
-                frobenius_norm = tf.norm(jaco)
-                total_loss = loss + 0.001 * frobenius_norm + \
-                    0.01 * tf.square(frobenius_norm)
 
             gradients = tape.gradient(loss, self.trainable_variables)
             optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
-            train_loss(total_loss)
-            return total_loss
+            train_loss(loss)
+            return loss
 
         T = 0.0
         t0 = Timer()
